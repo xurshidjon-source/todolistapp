@@ -39,6 +39,14 @@ dependencies:
   flutter_bloc: ^8.1.6
   carousel_slider: ^5.0.0
   speech_to_text: ^7.0.0
+  dartz: ^0.10.1
+  get_it: ^8.0.2
+  dio: ^5.7.0
+  hive:
+  hive_flutter:
+  path_provider:
+  build_runner:
+  hive_generator:
 
 dev_dependencies:
   flutter_test:

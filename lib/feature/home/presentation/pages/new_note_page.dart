@@ -1,23 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:todolistapp/commons/route/app_route.dart';
-import 'package:todolistapp/feature/home/presentation/pages/home_page.dart';
+import 'package:hive/hive.dart';
+import '../../data/model/notemodel.dart';
+import 'home_page.dart';
 
 class NewNotePage extends StatefulWidget {
-  const NewNotePage({super.key});
+  final Todos? noteToEdit;  // Optional note to edit, null if it's a new note
+
+  const NewNotePage({super.key, this.noteToEdit});
 
   @override
   State<NewNotePage> createState() => _NewNotePageState();
 }
 
 class _NewNotePageState extends State<NewNotePage> {
-  final TextEditingController _titlecontroller = TextEditingController();
-  final TextEditingController _descriptioncontroller = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
   @override
-  void dispose() {
-    _titlecontroller.clear();
-    _descriptioncontroller.clear();
-    super.dispose();
+  void initState() {
+    super.initState();
+    if (widget.noteToEdit != null) {
+      _titleController.text = widget.noteToEdit!.todo ?? '';
+      _descriptionController.text = widget.noteToEdit!.userId.toString();
+    }
+  }
+
+  void _saveNewNote() async {
+    if (_formKey.currentState?.validate() ?? false) {
+      // Create or update Todos object
+      Todos newTodo = Todos(
+        id: widget.noteToEdit?.id ?? DateTime.now().millisecondsSinceEpoch, // Use existing ID if editing
+        todo: _titleController.text,
+        completed: widget.noteToEdit?.completed ?? false, // Keep the previous completion state
+        userId: int.tryParse(_descriptionController.text) ?? 1,
+      );
+
+      var box = await Hive.openBox<NoteModel>('noteBox');
+      NoteModel? savedNoteModel = box.get('noteKey');
+
+      if (savedNoteModel == null) {
+        savedNoteModel = NoteModel(todos: [], total: 0, skip: 0, limit: 20);
+      }
+
+      if (widget.noteToEdit != null) {
+        // If editing, replace the existing note
+        savedNoteModel.todos![savedNoteModel.todos!.indexWhere((todo) => todo.id == widget.noteToEdit!.id)] = newTodo;
+      } else {
+        // If it's a new note, add it
+        savedNoteModel.todos!.add(newTodo);
+      }
+
+      savedNoteModel.total = savedNoteModel.todos!.length;
+      await box.put('noteKey', savedNoteModel);
+
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Note saved')));
+    }
   }
 
   @override
@@ -25,8 +64,8 @@ class _NewNotePageState extends State<NewNotePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.indigo,
+        title: Text(widget.noteToEdit == null ? 'New Note' : 'Edit Note'),
         centerTitle: true,
-        title: Text("New Note", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -36,7 +75,7 @@ class _NewNotePageState extends State<NewNotePage> {
             children: [
               // Title TextField
               TextFormField(
-                controller: _titlecontroller,
+                controller: _titleController,
                 decoration: InputDecoration(
                   labelText: 'Note Title',
                   hintText: 'Enter title here...',
@@ -51,12 +90,12 @@ class _NewNotePageState extends State<NewNotePage> {
               ),
               SizedBox(height: 20),
 
-              // Description TextField
+              // Description TextField (for example, userId or description)
               TextFormField(
-                controller: _descriptioncontroller,
+                controller: _descriptionController,
                 decoration: InputDecoration(
-                  labelText: 'Note Description',
-                  hintText: 'Enter description here...',
+                  labelText: 'User ID (or Description)',
+                  hintText: 'Enter description...',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 validator: (value) {
@@ -68,49 +107,14 @@ class _NewNotePageState extends State<NewNotePage> {
               ),
               SizedBox(height: 20),
 
-              // Save Button
+              // Submit Button
               ElevatedButton(
-                onPressed: () {
-                  if (_formKey.currentState?.validate() ?? false) {
-                    // Show the note details in a dialog
-                    showDialog(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          content: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text("Note Title", style: TextStyle(fontWeight: FontWeight.bold)),
-                                Text(_titlecontroller.text, style: TextStyle(color: Colors.indigoAccent)),
-                                SizedBox(height: 10),
-                                Text("Note Description", style: TextStyle(fontWeight: FontWeight.bold)),
-                                Text(_descriptioncontroller.text, style: TextStyle(color: Colors.indigoAccent)),
-                                SizedBox(height: 20,),
-                                Row(
-                                  children: [
-                                    TextButton(onPressed: (){
-                                      Navigator.pop(context);
-
-                                    }, child: Text("Cancel", style: TextStyle(color: Colors.red),)),
-                                    TextButton(onPressed: (){
-                                      AppRoute().navigateTo(context, HomePage());
-
-                                    }, child: Text("Save", style: TextStyle(color: Colors.indigo),))
-                                  ],
-                                )
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  }
-                },
+                onPressed: _saveNewNote,  // Save note to Hive
                 style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.indigoAccent)),
-                child: Text("Submit", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                child: Text(
+                  widget.noteToEdit == null ? 'Save Note' : 'Update Note',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
               ),
             ],
           ),
